@@ -30,7 +30,12 @@ function saveOption() {
   grist.widgetApi.setOption('sessionid', sid);
 }
 
+//grace period during which onRecord messages are ignored after startup,
+//so the value restored from sessionStorage takes precedence at init
+const STARTUP_GRACE_MS = 500;
+
 function initGrist() {
+  const startedAt = Date.now();
   let allRecords = [];
   let sessionID = "";
   const storageKey = () => sessionID + "_Dropdown_Item";
@@ -87,7 +92,8 @@ function initGrist() {
   });
 
   grist.onRecord(function (record) {
-    if (!record) {
+    //ignore early cursor messages so the stored value stays in charge at startup
+    if (!record || Date.now() - startedAt < STARTUP_GRACE_MS) {
       return;
     }
     const dropdown = document.getElementById('dropdown');
