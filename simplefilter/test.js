@@ -190,6 +190,23 @@ t.elements.filter.value = "lyon";
 t.apply();
 check("defsearchtype=AND, 'lyon' seul → ligne 2", t.state.selections.at(-1), [2]);
 
+// 14) rowIds Grist ≠ index de tableau : les ids bruts (100, 200, 300) doivent
+//     ressortir tels quels dans setSelectedRows, et records.id est bien un tableau.
+const DATA_GAPPED = [
+  { id: 100, Name: "xavier" },
+  { id: 200, Name: "yasmine" },
+  { id: 300, Name: "zoe" },
+];
+t.fireOptions({});
+t.elements.filter.value = "";
+t.fireRecords(DATA_GAPPED);
+const convGapped = t.getAllRecords();
+check("rowIds écartés : records.id est le tableau des rowIds bruts", convGapped && convGapped.id, [100, 200, 300]);
+check("rowIds écartés : displayall → setSelectedRows([100,200,300])", t.state.selections.at(-1), [100, 200, 300]);
+t.elements.filter.value = "yasmine";
+t.apply();
+check("rowIds écartés : recherche 'yasmine' → rowId 200 (pas l'index 1)", t.state.selections.at(-1), [200]);
+
 if (failures === 0) {
   console.log("\n--- PARTIE 1 : OK ---");
 } else {

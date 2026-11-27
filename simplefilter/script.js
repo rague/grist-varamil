@@ -224,13 +224,19 @@ function ApplyFilter() {
         let search = document.getElementById("filter").value;
         if (savesession) sessionStorage.setItem((sessionID.length > 0)? sessionID + "_Simple_Filter": sessionUUID, search);
         
-        // Use records received from grist.onRecords
+        // allRecords is populated by the onRecords handler, which converts the raw
+        // "rows" format [{id, Col1, ...}] delivered by Grist into the column-based
+        // format { id: [rowId, ...], Col1: [val, ...], ... } expected below.
         let records = allRecords;
 
         //if empty, display all the table
         if (!search || search.trim().length === 0) {
             if (displayall) {
-                grist.setSelectedRows(records ? records.id : null);
+                // Send the explicit list of rowIds (records.id is the converted id
+                // column, i.e. an array of rowIds) because setSelectedRows(null) does
+                // not reliably restore the full display on a section linked via
+                // SELECT BY. Fall back to null only if data has not arrived yet.
+                grist.setSelectedRows(Array.isArray(records && records.id) ? records.id : null);
             } else {
                 grist.setSelectedRows([]);
             }
