@@ -100,6 +100,8 @@ grist.onOptions((customOptions, _) => {
   });
 
   // Register onRecords handler to receive data from Grist (e.g. when used as SELECT BY source)
+  // Note: onRecords delivers rows in the "rows" format: flat objects like {id: 1, Col: value}
+  // (no nested "fields" property), exactly like fetchSelectedTable({format: "rows"}).
   grist.onRecords((records, mappings) => {
     if (!records || records.length === 0) {
       allRecords = { id: [] };
@@ -107,22 +109,19 @@ grist.onOptions((customOptions, _) => {
       return;
     }
 
-    // Convert row-based records to column-based format expected by the filter logic:
+    // Convert row-based records to the column-based format expected by the filter logic:
     // { id: [rowId1, rowId2, ...], col1: [val1, val2, ...], col2: [...] }
-    const columnBased = { id: [] };
-    for (const record of records) {
-      columnBased.id.push(record.id);
-      const fields = record.fields || {};
-      for (const [col, val] of Object.entries(fields)) {
-        if (!columnBased[col]) columnBased[col] = [];
-        columnBased[col].push(val);
+    // Handles both the flat format ({id, Col1, ...}) and the nested one ({id, fields: {...}}).
+    const nested = typeof records[0].fields === "object" && records[0].fields !== null;
+    const columnBased = { id: records.map((r) => r.id) };
+    const cols = Object.keys(records[0]).filter((c) => c !== "id");
+    if (nested) {
+      for (const col of Object.keys(records[0].fields)) {
+        columnBased[col] = records.map((r) => (r.fields && col in r.fields) ? r.fields[col] : null);
       }
-    }
-    // Pad shorter columns so every column has the same length as id
-    const numRows = columnBased.id.length;
-    for (const col of Object.keys(columnBased)) {
-      while (columnBased[col].length < numRows) {
-        columnBased[col].push(null);
+    } else {
+      for (const col of cols) {
+        columnBased[col] = records.map((r) => (col in r) ? r[col] : null);
       }
     }
     allRecords = columnBased;
@@ -255,7 +254,8 @@ function ApplyFilter() {
                 if (!search_col || search_col.length === 0) {
                     columns = Object.keys(records).filter((c) => c !== 'id');
                 } else {
-                    columns = search_col;
+                    // Ignore configured columns that don't exist in the received records
+                    columns = search_col.filter((c) => c in records);
                 }
 
                 [type, searches] = parseinput(search);
@@ -394,7 +394,8 @@ function ApplyFilter() {
             
                     grist.setSelectedRows(match);
                 }            
-} catch {
+} catch (err) {
+        console.error("ApplyFilter error:", err);
         grist.setSelectedRows([]);
     }   
 }
