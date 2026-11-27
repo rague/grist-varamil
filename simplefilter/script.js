@@ -9,6 +9,7 @@ var savesession = false;
 var sessionID = "";
 var sessionUUID = "";
 var defval = "";
+var allRecords = null; // Records received from grist.onRecords (column-based format)
 const searchtypes = ["+", "&", "&&"];
 // const searchtypesnames = ["OU", "ET", "ET col"];
 const searchtypesnames = ["OR", "AND", "AND col"];
@@ -95,6 +96,36 @@ grist.onOptions((customOptions, _) => {
     console.log(cursearchtype);
     updateTag();
 
+    ApplyFilter();
+  });
+
+  // Register onRecords handler to receive data from Grist (e.g. when used as SELECT BY source)
+  grist.onRecords((records, mappings) => {
+    if (!records || records.length === 0) {
+      allRecords = { id: [] };
+      ApplyFilter();
+      return;
+    }
+
+    // Convert row-based records to column-based format expected by the filter logic:
+    // { id: [rowId1, rowId2, ...], col1: [val1, val2, ...], col2: [...] }
+    const columnBased = { id: [] };
+    for (const record of records) {
+      columnBased.id.push(record.id);
+      const fields = record.fields || {};
+      for (const [col, val] of Object.entries(fields)) {
+        if (!columnBased[col]) columnBased[col] = [];
+        columnBased[col].push(val);
+      }
+    }
+    // Pad shorter columns so every column has the same length as id
+    const numRows = columnBased.id.length;
+    for (const col of Object.keys(columnBased)) {
+      while (columnBased[col].length < numRows) {
+        columnBased[col].push(null);
+      }
+    }
+    allRecords = columnBased;
     ApplyFilter();
   });
 
@@ -205,9 +236,13 @@ function ApplyFilter() {
                 return;
             }
 
-            // fetch the table
-            grist.fetchSelectedTable(format="columns", includeColumns=target).then((records) => {    
-                let scol, re, neg, tp, searches, type;
+            // Use records received from grist.onRecords
+            let records = allRecords;
+            if (!records) {
+                grist.setSelectedRows([]);
+                return;
+            }
+            let scol, re, neg, tp, searches, type;
 
                 // get columns names
                 let columns;
@@ -349,7 +384,6 @@ function ApplyFilter() {
             
                     grist.setSelectedRows(match);
                 }            
-            });
         }
     } catch {
         grist.setSelectedRows([]);
